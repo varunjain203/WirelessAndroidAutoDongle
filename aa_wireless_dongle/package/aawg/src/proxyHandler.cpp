@@ -37,6 +37,22 @@ ssize_t AAWProxy::readFully(int fd, unsigned char *buffer, size_t nbyte) {
     return nbyte;
 }
 
+ssize_t AAWProxy::writeFully(int fd, const unsigned char *buffer, size_t nbyte) {
+    size_t remaining_bytes = nbyte;
+    while (remaining_bytes > 0) {
+        ssize_t len = write(fd, buffer, remaining_bytes);
+
+        if (len <= 0) {
+            return len;
+        }
+
+        buffer += len;
+        remaining_bytes -= len;
+    }
+
+    return nbyte;
+}
+
 ssize_t AAWProxy::readMessage(int fd, unsigned char *buffer, size_t buffer_len) {
     size_t header_length = 4;
     if (ssize_t len = readFully(fd, buffer, header_length); len <= 0) {
@@ -117,7 +133,7 @@ void AAWProxy::forward(ProxyDirection direction, std::atomic<bool>& should_exit)
         }
 
         // Write
-        ssize_t wlen = write(write_fd, buffer, len);
+        ssize_t wlen = writeFully(write_fd, buffer, len);
 
         if (wlen <= 0) {
             // Start logging read/write details if there is an error.
@@ -129,6 +145,10 @@ void AAWProxy::forward(ProxyDirection direction, std::atomic<bool>& should_exit)
 
         if (wlen < 0) {
             Logger::instance()->info("Write to %s failed: %s\n", write_name.c_str(), strerror(errno));
+            break;
+        }
+        else if (wlen != len) {
+            Logger::instance()->info("Partial write to %s: wrote %d of %d bytes\n", write_name.c_str(), wlen, len);
             break;
         }
         else if (should_exit) {

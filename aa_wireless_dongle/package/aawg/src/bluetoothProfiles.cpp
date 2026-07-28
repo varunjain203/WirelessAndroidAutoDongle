@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <vector>
 
 #include "common.h"
 #include "bluetoothHandler.h"
@@ -100,26 +101,24 @@ private:
         uint16_t messageSize = (uint16_t)message->ByteSizeLong();
         uint16_t length = messageSize + 4;
 
-        unsigned char* buffer = new unsigned char[length];
+        std::vector<unsigned char> buffer(length);
 
         uint16_t networkShort = 0;
         networkShort = htons(messageSize);
-        memcpy(buffer, &networkShort, sizeof(networkShort));
+        memcpy(buffer.data(), &networkShort, sizeof(networkShort));
 
         networkShort = htons(static_cast<uint16_t>(messageId));
-        memcpy(buffer + 2, &networkShort, sizeof(networkShort));
+        memcpy(buffer.data() + 2, &networkShort, sizeof(networkShort));
 
-        message->SerializeToArray(buffer + 4, messageSize);
+        message->SerializeToArray(buffer.data() + 4, messageSize);
 
-        ssize_t wrote = write(m_fd, buffer, length);
+        ssize_t wrote = write(m_fd, buffer.data(), length);
         if (wrote < 0) {
             Logger::instance()->info("Error sending %s, messageId: %d\n", MessageName(messageId).c_str(), messageId);
         }
         else {
             Logger::instance()->info("Sent %s, messageId: %d, wrote %d bytes\n", MessageName(messageId).c_str(), messageId, wrote);
         }
-
-        delete[] buffer;
     }
 
     MessageId ReadMessage() {
@@ -144,10 +143,8 @@ private:
 
         Logger::instance()->info("Read %s. length: %d, messageId: %d\n", MessageName(messageId).c_str(), length, messageId);
         
-        unsigned char* buffer = new unsigned char[length];
-        readBytes = read(m_fd, buffer, length);
-
-        delete[] buffer;
+        std::vector<unsigned char> buffer(length);
+        readBytes = read(m_fd, buffer.data(), length);
 
         return messageId;
     }
