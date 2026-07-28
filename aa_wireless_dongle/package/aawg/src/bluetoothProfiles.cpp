@@ -97,6 +97,32 @@ private:
         }
     }
 
+    ssize_t readFully(unsigned char* buffer, size_t nbyte) {
+        size_t remaining_bytes = nbyte;
+        while (remaining_bytes > 0) {
+            ssize_t len = read(m_fd, buffer, remaining_bytes);
+            if (len <= 0) {
+                return len;
+            }
+            buffer += len;
+            remaining_bytes -= len;
+        }
+        return nbyte;
+    }
+
+    ssize_t writeFully(const unsigned char* buffer, size_t nbyte) {
+        size_t remaining_bytes = nbyte;
+        while (remaining_bytes > 0) {
+            ssize_t len = write(m_fd, buffer, remaining_bytes);
+            if (len <= 0) {
+                return len;
+            }
+            buffer += len;
+            remaining_bytes -= len;
+        }
+        return nbyte;
+    }
+
     void SendMessage(MessageId messageId, google::protobuf::MessageLite* message) {
         uint16_t messageSize = (uint16_t)message->ByteSizeLong();
         uint16_t length = messageSize + 4;
@@ -112,31 +138,27 @@ private:
 
         message->SerializeToArray(buffer.data() + 4, messageSize);
 
-        ssize_t wrote = write(m_fd, buffer.data(), length);
+        ssize_t wrote = writeFully(buffer.data(), length);
         if (wrote < 0) {
             Logger::instance()->info("Error sending %s, messageId: %d\n", MessageName(messageId).c_str(), messageId);
-        }
-        else {
+        } else if ((size_t)wrote != length) {
+            Logger::instance()->info("Partial send for %s, messageId: %d, wrote %d of %d bytes\n", MessageName(messageId).c_str(), messageId, wrote, length);
+        } else {
             Logger::instance()->info("Sent %s, messageId: %d, wrote %d bytes\n", MessageName(messageId).c_str(), messageId, wrote);
         }
     }
 
     MessageId ReadMessage() {
         uint16_t networkShort = 0;
-        ssize_t readBytes;
 
-        readBytes = read(m_fd, &networkShort, 2);
-        if (readBytes != 2) {
-            // Could not read 2 bytes. Do something.
-            Logger::instance()->info("Error reading length, read bytes: %d, errno: %s\n", readBytes, strerror(errno));
+        if (readFully(reinterpret_cast<unsigned char*>(&networkShort), 2) != 2) {
+            Logger::instance()->info("Error reading length, errno: %s\n", strerror(errno));
             return MessageId::Invalid;
         }
         uint16_t length = ntohs(networkShort);
 
-        readBytes = read(m_fd, &networkShort, 2);
-        if (readBytes != 2) {
-            // Could not read 2 bytes. Do something.
-            Logger::instance()->info("Error reading message id, read bytes: %d, errno: %s\n", readBytes, strerror(errno));
+        if (readFully(reinterpret_cast<unsigned char*>(&networkShort), 2) != 2) {
+            Logger::instance()->info("Error reading message id, errno: %s\n", strerror(errno));
             return MessageId::Invalid;
         }
         MessageId messageId = static_cast<MessageId>(ntohs(networkShort));
@@ -144,7 +166,10 @@ private:
         Logger::instance()->info("Read %s. length: %d, messageId: %d\n", MessageName(messageId).c_str(), length, messageId);
         
         std::vector<unsigned char> buffer(length);
-        readBytes = read(m_fd, buffer.data(), length);
+        if (readFully(buffer.data(), length) != (ssize_t)length) {
+            Logger::instance()->info("Error reading message payload, errno: %s\n", strerror(errno));
+            return MessageId::Invalid;
+        }
 
         return messageId;
     }

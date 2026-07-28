@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <thread>
@@ -207,8 +208,15 @@ void AAWProxy::handleClient(int server_sock) {
     };
 
     if (setsockopt(m_tcp_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) {
-        Logger::instance()->info("setsockopt failed: %s\n", strerror(errno));
-        return;
+        Logger::instance()->info("setsockopt SO_RCVTIMEO failed: %s\n", strerror(errno));
+    }
+    if (setsockopt(m_tcp_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv))) {
+        Logger::instance()->info("setsockopt SO_SNDTIMEO failed: %s\n", strerror(errno));
+    }
+
+    int tcp_no_delay = 1;
+    if (setsockopt(m_tcp_fd, IPPROTO_TCP, TCP_NODELAY, &tcp_no_delay, sizeof(tcp_no_delay))) {
+        Logger::instance()->info("setsockopt TCP_NODELAY failed: %s\n", strerror(errno));
     }
 
     // Setup signal handler
