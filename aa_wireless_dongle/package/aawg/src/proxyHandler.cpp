@@ -38,6 +38,11 @@ ssize_t AAWProxy::readFully(int fd, unsigned char *buffer, size_t nbyte) {
     return nbyte;
 }
 
+
+
+
+
+
 ssize_t AAWProxy::writeFully(int fd, const unsigned char *buffer, size_t nbyte) {
     size_t remaining_bytes = nbyte;
     while (remaining_bytes > 0) {

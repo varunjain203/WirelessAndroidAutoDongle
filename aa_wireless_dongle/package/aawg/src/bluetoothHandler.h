@@ -2,6 +2,8 @@
 
 #include <optional>
 #include <thread>
+#include <vector>
+#include <chrono>
 
 #include "bluetoothCommon.h"
 
@@ -27,6 +29,8 @@ private:
     BluetoothHandler& operator=(BluetoothHandler const&);
 
     DBus::ManagedObjects getBluezObjects();
+    std::vector<std::string> getBluezDevicePaths();
+    void refreshDevicePaths();
 
     void initAdapter();
     void setPower(bool on);
@@ -51,4 +55,6 @@ private:
     std::shared_ptr<BLEAdvertisement> m_leAdvertisement;
 
     std::string m_adapterAlias;
+    std::vector<std::string> m_devicePaths;
+    std::chrono::steady_clock::time_point m_devicePathRefreshTime;
 };

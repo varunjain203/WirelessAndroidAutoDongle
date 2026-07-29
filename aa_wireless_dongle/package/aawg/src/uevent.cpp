@@ -30,8 +30,6 @@ void UeventMonitor::monitorLoop(int nl_socket) {
         char* end = msg + len;
         *end = '\0';
 
-        // printf("length: %ld msg: %s\n", len, msg);
-
         // Parse the env from message
         UeventEnv envMap;
         char* current = msg;
@@ -41,23 +39,33 @@ void UeventMonitor::monitorLoop(int nl_socket) {
                 std::string envValue(split + 1);
 
                 envMap.emplace(envName, envValue);
-                // printf("%s = %s\n", envName.c_str(), envValue.c_str());
             }
 
             current += strlen(current) + 1;
         }
 
         // Call the handlers
-        for (auto it = handlers.cbegin(); it != handlers.cend(); ++it) {
+        for (auto it = handlers.begin(); it != handlers.end();) {
             if ((*it)(envMap)) {
                 it = handlers.erase(it);
+            } else {
+                ++it;
             }
         }
     }
 }
 
-void UeventMonitor::addHandler(std::function<bool(UeventEnv)> handler) {
+UeventMonitor::HandlerId UeventMonitor::addHandler(std::function<bool(UeventEnv)> handler) {
     handlers.push_back(handler);
+    auto it = handlers.end();
+    --it;
+    return it;
+}
+
+void UeventMonitor::removeHandler(HandlerId handlerId) {
+    if (handlerId != handlers.end()) {
+        handlers.erase(handlerId);
+    }
 }
 
 std::optional<std::thread> UeventMonitor::start() {

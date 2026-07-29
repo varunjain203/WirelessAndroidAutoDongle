@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <vector>
+#include <chrono>
 
 #include "common.h"
 #include "bluetoothHandler.h"
@@ -65,6 +67,27 @@ DBus::ManagedObjects BluetoothHandler::getBluezObjects() {
     DBus::MethodProxy getManagedObjects = *(m_bluezRootObject->create_method<DBus::ManagedObjects(void)>("org.freedesktop.DBus.ObjectManager", "GetManagedObjects"));
 
     return getManagedObjects();
+}
+
+std::vector<std::string> BluetoothHandler::getBluezDevicePaths() {
+    DBus::ManagedObjects objects = getBluezObjects();
+    std::vector<std::string> device_paths;
+
+    for (auto const& [path, interfaces]: objects) {
+        for (auto const& [interface, properties]: interfaces) {
+            if (interface == INTERFACE_BLUEZ_DEVICE) {
+                device_paths.push_back(path);
+                break;
+            }
+        }
+    }
+
+    return device_paths;
+}
+
+void BluetoothHandler::refreshDevicePaths() {
+    m_devicePaths = getBluezDevicePaths();
+    m_devicePathRefreshTime = std::chrono::steady_clock::now();
 }
 
 void BluetoothHandler::initAdapter() {
@@ -173,27 +196,20 @@ void BluetoothHandler::stopAdvertising() {
 }
 
 void BluetoothHandler::connectDevice() {
-    DBus::ManagedObjects objects = getBluezObjects();
-
-    std::vector<std::string> device_paths;
-    for (auto const& [path, interfaces]: objects) {
-        for (auto const& [interface, properties]: interfaces) {
-            if (interface == INTERFACE_BLUEZ_DEVICE) {
-                device_paths.push_back(path);
-            }
-        }
+    if (m_devicePaths.empty() || std::chrono::steady_clock::now() - m_devicePathRefreshTime > std::chrono::seconds(10)) {
+        refreshDevicePaths();
     }
 
-    if (!device_paths.size()) {
+    if (m_devicePaths.empty()) {
         Logger::instance()->info("Did not find any connected bluetooth device\n");
         return;
     }
 
     const bool isDongleMode = (Config::instance()->getConnectionStrategy() == ConnectionStrategy::DONGLE_MODE);
 
-    Logger::instance()->info("Found %d bluetooth devices\n", device_paths.size());
+    Logger::instance()->info("Found %d bluetooth devices\n", static_cast<int>(m_devicePaths.size()));
 
-    for (const std::string &device_path: device_paths) {
+    for (const std::string &device_path: m_devicePaths) {
         Logger::instance()->info("Trying to connect bluetooth device at path: %s\n", device_path.c_str());
 
         std::shared_ptr<DBus::ObjectProxy> bluezDevice = m_connection->create_object_proxy(BLUEZ_BUS_NAME, device_path);

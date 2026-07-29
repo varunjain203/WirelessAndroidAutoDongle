@@ -20,6 +20,8 @@ int main(void) {
         BluetoothHandler::instance().powerOn();
     }
 
+    int retryDelaySeconds = 1;
+
     while (true) {
         Logger::instance()->info("Connection Strategy: %d\n", connectionStrategy);
 
@@ -52,8 +54,10 @@ int main(void) {
         UsbManager::instance().disableGadget();
 
         if (connectionStrategy != ConnectionStrategy::DONGLE_MODE) {
-            // sleep for a couple of seconds before retrying
-            sleep(2);
+            sleep(retryDelaySeconds);
+            if (retryDelaySeconds < 8) {
+                retryDelaySeconds *= 2;
+            }
         }
     }
 
